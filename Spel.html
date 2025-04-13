@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Avancerat Spel</title>
+    <style>
+        /* style.css */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #222;
+        }
+
+        #gameContainer {
+            position: relative;
+            width: 800px;
+            height: 600px;
+        }
+
+        #gameCanvas {
+            border: 2px solid white;
+            background-color: #000;
+        }
+
+        #score {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-size: 20px;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+        <div id="score">Poäng: 0</div>
+    </div>
+    <script>
+        // game.js
+        let canvas = document.getElementById("gameCanvas");
+        let ctx = canvas.getContext("2d");
+
+        canvas.width = 800;
+        canvas.height = 600;
+
+        let score = 0;
+        let player = { x: 50, y: canvas.height / 2, width: 50, height: 50, speed: 5 };
+        let obstacles = [];
+        let gameInterval;
+        let obstacleInterval;
+
+        // Spel-loop
+        function gameLoop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            movePlayer();
+            drawPlayer();
+            handleObstacles();
+            drawObstacles();
+            updateScore();
+        }
+
+        // Uppdatera spelarens position
+        function movePlayer() {
+            if (keys.ArrowUp && player.y > 0) player.y -= player.speed;
+            if (keys.ArrowDown && player.y < canvas.height - player.height) player.y += player.speed;
+        }
+
+        // Rita ut spelaren
+        function drawPlayer() {
+            ctx.fillStyle = "green";
+            ctx.fillRect(player.x, player.y, player.width, player.height);
+        }
+
+        // Skapa och hantera hinder
+        function handleObstacles() {
+            for (let i = 0; i < obstacles.length; i++) {
+                obstacles[i].x -= 5;
+
+                // Om hindret är bortom spelarens position, öka poängen och ta bort hindret
+                if (obstacles[i].x + obstacles[i].width < player.x && !obstacles[i].passed) {
+                    score++;
+                    obstacles[i].passed = true;  // Markera att hindret har passerats
+                }
+
+                if (obstacles[i].x < 0) obstacles.splice(i, 1); // Ta bort hinder som försvunnit från spelplanen
+                if (checkCollision(obstacles[i])) {
+                    endGame();
+                }
+            }
+            if (Math.random() < 0.01) createObstacle();
+        }
+
+        // Skapa nya hinder
+        function createObstacle() {
+            let obstacle = { x: canvas.width, y: Math.random() * (canvas.height - 50), width: 20, height: 50, passed: false };
+            obstacles.push(obstacle);
+        }
+
+        // Rita ut hinder
+        function drawObstacles() {
+            ctx.fillStyle = "red";
+            for (let i = 0; i < obstacles.length; i++) {
+                ctx.fillRect(obstacles[i].x, obstacles[i].y, obstacles[i].width, obstacles[i].height);
+            }
+        }
+
+        // Kolla om spelaren kolliderar med något hinder
+        function checkCollision(obstacle) {
+            return player.x < obstacle.x + obstacle.width &&
+                   player.x + player.width > obstacle.x &&
+                   player.y < obstacle.y + obstacle.height &&
+                   player.y + player.height > obstacle.y;
+        }
+
+        // Uppdatera poäng
+        function updateScore() {
+            document.getElementById("score").innerText = "Poäng: " + score;
+        }
+
+        // Starta spelet
+        function startGame() {
+            gameInterval = setInterval(gameLoop, 1000 / 60);
+            obstacleInterval = setInterval(createObstacle, 2000);
+        }
+
+        function endGame() {
+            clearInterval(gameInterval);
+            clearInterval(obstacleInterval);
+            alert("Spelet är slut! Din poäng var: " + score);
+        }
+
+        // Hantera tangenttryckningar
+        let keys = {};
+        window.addEventListener("keydown", (e) => { keys[e.key] = true; });
+        window.addEventListener("keyup", (e) => { keys[e.key] = false; });
+
+        // Starta spelet när sidan är klar
+        window.onload = startGame;
+    </script>
+</body>
+</html>
