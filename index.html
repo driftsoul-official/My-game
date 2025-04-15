@@ -1,147 +1,122 @@
+
 <!DOCTYPE html>
 <html lang="sv">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Avancerat Spel</title>
-    <style>
-        /* style.css */
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            background-color: #222;
-        }
-
-        #gameContainer {
-            position: relative;
-            width: 800px;
-            height: 600px;
-        }
-
-        #gameCanvas {
-            border: 2px solid white;
-            background-color: #000;
-        }
-
-        #score {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            font-size: 20px;
-            color: white;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <title>PixelDisplay 32x32</title>
+  <style>
+    body { font-family: sans-serif; text-align: center; background: #f0f0f0; }
+    canvas {
+      border: 1px solid #000;
+      image-rendering: pixelated;
+      margin: 10px auto;
+      display: block;
+      background: #fff;
+    }
+    .colors {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    .color-btn {
+      width: 30px; height: 30px;
+      border: 2px solid #000;
+      cursor: pointer;
+    }
+  </style>
 </head>
 <body>
-    <div id="gameContainer">
-        <canvas id="gameCanvas"></canvas>
-        <div id="score">Poäng: 0</div>
-    </div>
-    <script>
-        // game.js
-        let canvas = document.getElementById("gameCanvas");
-        let ctx = canvas.getContext("2d");
+  <h1>PixelDisplay 32x32</h1>
+  <canvas id="canvas" width="512" height="512"></canvas>
+  <div class="colors" id="colorButtons"></div>
 
-        canvas.width = 800;
-        canvas.height = 600;
+  <script>
+    const gridSize = 32;
+    const pixelSize = 16;
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
 
-        let score = 0;
-        let player = { x: 50, y: canvas.height / 2, width: 50, height: 50, speed: 5 };
-        let obstacles = [];
-        let gameInterval;
-        let obstacleInterval;
+    const colors = [
+      "#000000", "#FFFFFF", "#FF0000", "#00FF00", "#0000FF", "#FFFF00",
+      "#FFA500", "#800080", "#00FFFF", "#FFC0CB", "#808080", "#A52A2A"
+    ];
+    let selectedColor = colors[0];
+    let pixelChanged = false;
 
-        // Spel-loop
-        function gameLoop() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            movePlayer();
-            drawPlayer();
-            handleObstacles();
-            drawObstacles();
-            updateScore();
+    const colorButtonsContainer = document.getElementById("colorButtons");
+    colors.forEach(color => {
+      const btn = document.createElement("button");
+      btn.className = "color-btn";
+      btn.style.backgroundColor = color;
+      btn.onclick = () => selectedColor = color;
+      colorButtonsContainer.appendChild(btn);
+    });
+
+    let pixelData = Array.from({length: gridSize}, () => Array(gridSize).fill("#FFFFFF"));
+
+    function drawGrid() {
+      for (let y = 0; y < gridSize; y++) {
+        for (let x = 0; x < gridSize; x++) {
+          ctx.fillStyle = pixelData[y][x];
+          ctx.fillRect(x * pixelSize, y * pixelSize, pixelSize, pixelSize);
         }
+      }
+    }
 
-        // Uppdatera spelarens position
-        function movePlayer() {
-            if (keys.ArrowUp && player.y > 0) player.y -= player.speed;
-            if (keys.ArrowDown && player.y < canvas.height - player.height) player.y += player.speed;
-        }
+    canvas.addEventListener("click", e => {
+      const rect = canvas.getBoundingClientRect();
+      const x = Math.floor((e.clientX - rect.left) / pixelSize);
+      const y = Math.floor((e.clientY - rect.top) / pixelSize);
+      pixelData[y][x] = selectedColor;
+      drawGrid();
+      pixelChanged = true;
+    });
 
-        // Rita ut spelaren
-        function drawPlayer() {
-            ctx.fillStyle = "green";
-            ctx.fillRect(player.x, player.y, player.width, player.height);
-        }
+    function sendToDiscord() {
+      if (!pixelChanged) return;
+      canvas.toBlob(blob => {
+        const formData = new FormData();
+        formData.append("file", blob, "canvas.png");
+        formData.append("username", "PixelDisplay");
+        const now = new Date();
+        formData.append("content", `🟩 Pixelcanvas uppdaterad: ${now.toLocaleString("sv-SE")}`);
 
-        // Skapa och hantera hinder
-        function handleObstacles() {
-            for (let i = 0; i < obstacles.length; i++) {
-                obstacles[i].x -= 5;
+        fetch("/webhook", {
+          method: "POST",
+          body: formData
+        }).then(() => {
+          pixelChanged = false;
+        });
+      });
+    }
 
-                // Om hindret är bortom spelarens position, öka poängen och ta bort hindret
-                if (obstacles[i].x + obstacles[i].width < player.x && !obstacles[i].passed) {
-                    score++;
-                    obstacles[i].passed = true;  // Markera att hindret har passerats
-                }
+    function load() {
+      fetch("/pixels")
+        .then(res => res.json())
+        .then(data => {
+          pixelData = data;
+          drawGrid();
+        });
+    }
 
-                if (obstacles[i].x < 0) obstacles.splice(i, 1); // Ta bort hinder som försvunnit från spelplanen
-                if (checkCollision(obstacles[i])) {
-                    endGame();
-                }
-            }
-            if (Math.random() < 0.01) createObstacle();
-        }
+    function save() {
+      fetch("/pixels", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(pixelData)
+      });
+    }
 
-        // Skapa nya hinder
-        function createObstacle() {
-            let obstacle = { x: canvas.width, y: Math.random() * (canvas.height - 50), width: 20, height: 50, passed: false };
-            obstacles.push(obstacle);
-        }
-
-        // Rita ut hinder
-        function drawObstacles() {
-            ctx.fillStyle = "red";
-            for (let i = 0; i < obstacles.length; i++) {
-                ctx.fillRect(obstacles[i].x, obstacles[i].y, obstacles[i].width, obstacles[i].height);
-            }
-        }
-
-        // Kolla om spelaren kolliderar med något hinder
-        function checkCollision(obstacle) {
-            return player.x < obstacle.x + obstacle.width &&
-                   player.x + player.width > obstacle.x &&
-                   player.y < obstacle.y + obstacle.height &&
-                   player.y + player.height > obstacle.y;
-        }
-
-        // Uppdatera poäng
-        function updateScore() {
-            document.getElementById("score").innerText = "Poäng: " + score;
-        }
-
-        // Starta spelet
-        function startGame() {
-            gameInterval = setInterval(gameLoop, 1000 / 60);
-            obstacleInterval = setInterval(createObstacle, 2000);
-        }
-
-        function endGame() {
-            clearInterval(gameInterval);
-            clearInterval(obstacleInterval);
-            alert("Spelet är slut! Din poäng var: " + score);
-        }
-
-        // Hantera tangenttryckningar
-        let keys = {};
-        window.addEventListener("keydown", (e) => { keys[e.key] = true; });
-        window.addEventListener("keyup", (e) => { keys[e.key] = false; });
-
-        // Starta spelet när sidan är klar
-        window.onload = startGame;
-    </script>
+    load();
+    drawGrid();
+    setInterval(() => {
+      if (pixelChanged) {
+        save();
+        sendToDiscord();
+      }
+    }, 60000);
+  </script>
 </body>
 </html>
